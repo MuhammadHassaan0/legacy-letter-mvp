@@ -50,30 +50,60 @@ const PROMPTS: Prompt[] = [
 
 type Responses = Record<string, string>;
 
+type PersonalDetails = {
+  name: string;
+  email: string;
+};
+
 const buildInitialResponses = (): Responses =>
   PROMPTS.reduce<Responses>((acc, prompt) => {
     acc[prompt.id] = "";
     return acc;
   }, {});
 
-const formatLetter = (responses: Responses, timestamp: Date) => {
+const formatLetter = (
+  responses: Responses,
+  timestamp: Date,
+  details: PersonalDetails
+) => {
   const formattedTimestamp = new Intl.DateTimeFormat("en-US", {
     dateStyle: "full",
     timeStyle: "short"
   }).format(timestamp);
+
+  const aboutLines: string[] = [];
+  if (details.name.trim()) {
+    aboutLines.push(`Name: ${details.name.trim()}`);
+  }
+  if (details.email.trim()) {
+    aboutLines.push(`Email: ${details.email.trim()}`);
+  }
+  const aboutSection =
+    aboutLines.length > 0 ? `${aboutLines.join("\n")}\n\n` : "";
 
   const body = PROMPTS.map((prompt) => {
     const answer = responses[prompt.id].trim() || "[Not provided]";
     return `${prompt.title}\n${answer}`;
   }).join("\n\n");
 
-  return `Legacy Letter\nCreated on: ${formattedTimestamp}\n\n${body}\n`;
+  return `Legacy Letter\nCreated on: ${formattedTimestamp}\n\n${aboutSection}${body}\n`;
 };
 
 export default function Home() {
   const [responses, setResponses] = useState<Responses>(buildInitialResponses);
+  const [details, setDetails] = useState<PersonalDetails>({
+    name: "",
+    email: ""
+  });
+  const [currentStep, setCurrentStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+
+  const totalQuestions = PROMPTS.length;
+  const isOptionalStep = currentStep === 0;
+  const activePrompt = !isOptionalStep
+    ? PROMPTS[currentStep - 1]
+    : undefined;
 
   const allComplete = useMemo(
     () =>
@@ -82,10 +112,29 @@ export default function Home() {
   );
 
   const previewLetter = useMemo(() => {
-    return formatLetter(responses, new Date());
-  }, [responses]);
+    return formatLetter(responses, new Date(), details);
+  }, [responses, details]);
 
-  const handleDownload = (event: FormEvent<HTMLFormElement>) => {
+  const currentAnswer = activePrompt ? responses[activePrompt.id] : "";
+  const currentAnswerValid =
+    isOptionalStep || currentAnswer.trim().length > 0;
+
+  const progressPercentage =
+    (Math.min(currentStep, totalQuestions) / totalQuestions) * 100;
+
+  const handleNext = () => {
+    setShowErrors(false);
+    if (currentStep < totalQuestions) {
+      setCurrentStep((previous) => previous + 1);
+    }
+  };
+
+  const handleBack = () => {
+    setShowErrors(false);
+    setCurrentStep((previous) => Math.max(0, previous - 1));
+  };
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!allComplete) {
       setShowErrors(true);
@@ -93,7 +142,7 @@ export default function Home() {
     }
 
     const now = new Date();
-    const letter = formatLetter(responses, now);
+    const letter = formatLetter(responses, now, details);
     const fileName = `legacy-letter-${now.toISOString().replace(/[:.]/g, "-")}.txt`;
 
     const blob = new Blob([letter], { type: "text/plain" });
@@ -139,56 +188,136 @@ export default function Home() {
 
       <form
         className="flex flex-col gap-10 pb-20"
-        onSubmit={handleDownload}
+        onSubmit={handleSubmit}
         noValidate
       >
-        <div className="grid gap-8">
-          {PROMPTS.map((prompt) => {
-            const value = responses[prompt.id];
-            const showFieldError = showErrors && value.trim().length === 0;
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-6">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-semibold uppercase tracking-[0.18em] text-brand-600">
+                  {isOptionalStep
+                    ? "About you (optional)"
+                    : `Question ${currentStep} of ${totalQuestions}`}
+                </p>
+                <p className="text-xs text-slate-500">
+                  Nothing is uploaded or stored.
+                </p>
+              </div>
+              <div className="h-2 w-full rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-brand-500 transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                  aria-hidden="true"
+                />
+              </div>
+            </div>
 
-            return (
-              <div
-                key={prompt.id}
-                className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm transition hover:shadow-md"
-              >
-                <div className="flex flex-col gap-3">
-                  <h2 className="text-xl font-semibold text-slate-900">
-                    {prompt.title}
-                  </h2>
-                  {prompt.description ? (
-                    <p className="text-sm leading-relaxed text-slate-600">
-                      {prompt.description}
-                    </p>
-                  ) : null}
-                  <label className="sr-only" htmlFor={prompt.id}>
-                    {prompt.title}
-                  </label>
-                  <textarea
-                    id={prompt.id}
-                    name={prompt.id}
-                    value={value}
+            {isOptionalStep ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-base leading-relaxed text-slate-700">
+                  Add your details if you&apos;d like them woven into the letter.
+                  You can leave these blank.
+                </p>
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  Name
+                  <input
+                    type="text"
+                    value={details.name}
                     onChange={(event) =>
-                      setResponses((previous) => ({
+                      setDetails((previous) => ({
                         ...previous,
-                        [prompt.id]: event.target.value
+                        name: event.target.value
                       }))
                     }
-                    placeholder={prompt.placeholder}
-                    className="min-h-[160px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base leading-relaxed text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
+                    placeholder="Your name (optional)"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
                   />
-                  <p className="text-xs text-slate-500">
-                    Tip: you can use system dictation to speak instead of typing.
-                  </p>
-                  {showFieldError ? (
-                    <p className="text-sm font-medium text-brand-600">
-                      Please add a few words here so your letter feels complete.
-                    </p>
-                  ) : null}
-                </div>
+                </label>
+                <label className="flex flex-col gap-2 text-sm text-slate-700">
+                  Email
+                  <input
+                    type="email"
+                    value={details.email}
+                    onChange={(event) =>
+                      setDetails((previous) => ({
+                        ...previous,
+                        email: event.target.value
+                      }))
+                    }
+                    placeholder="Your email (optional)"
+                    className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
+                  />
+                </label>
               </div>
-            );
-          })}
+            ) : activePrompt ? (
+              <div className="flex flex-col gap-3">
+                <h2 className="text-xl font-semibold text-slate-900">
+                  {activePrompt.title}
+                </h2>
+                {activePrompt.description ? (
+                  <p className="text-sm leading-relaxed text-slate-600">
+                    {activePrompt.description}
+                  </p>
+                ) : null}
+                <label className="sr-only" htmlFor={activePrompt.id}>
+                  {activePrompt.title}
+                </label>
+                <textarea
+                  id={activePrompt.id}
+                  name={activePrompt.id}
+                  value={currentAnswer}
+                  onChange={(event) =>
+                    setResponses((previous) => ({
+                      ...previous,
+                      [activePrompt.id]: event.target.value
+                    }))
+                  }
+                  placeholder={activePrompt.placeholder}
+                  className="min-h-[200px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base leading-relaxed text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
+                />
+                <p className="text-xs text-slate-500">
+                  Tip: you can use system dictation to speak instead of typing.
+                </p>
+                {!currentAnswerValid && showErrors ? (
+                  <p className="text-sm font-medium text-brand-600">
+                    Please add a few words here so your letter feels complete.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  disabled={currentStep === 0}
+                  className="inline-flex items-center justify-center rounded-full border border-brand-200 px-5 py-2.5 text-sm font-semibold text-brand-700 transition hover:border-brand-300 hover:bg-brand-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                >
+                  Back
+                </button>
+              </div>
+              {currentStep < totalQuestions ? (
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={!currentAnswerValid}
+                  className="inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-brand-200"
+                >
+                  Next
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!currentAnswerValid}
+                  className="inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-brand-200"
+                >
+                  Generate my letter
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <section className="rounded-3xl bg-white/70 p-6 shadow-inner ring-1 ring-slate-200 backdrop-blur">
@@ -212,12 +341,9 @@ export default function Home() {
                 Your letter saves locally on download. We do not store anything.
               </p>
             </div>
-            <button
-              type="submit"
-              className="mt-2 inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-brand-200"
-            >
-              Download letter (.txt)
-            </button>
+            <p className="text-sm text-brand-600">
+              Return to earlier questions anytime to revise before you export.
+            </p>
           </div>
           {!allComplete && showErrors ? (
             <p className="text-sm font-medium text-brand-700">
