@@ -98,6 +98,8 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [emailRecipients, setEmailRecipients] = useState("");
 
   const totalQuestions = PROMPTS.length;
   const isOptionalStep = currentStep === 0;
@@ -121,6 +123,19 @@ export default function Home() {
 
   const progressPercentage =
     (Math.min(currentStep, totalQuestions) / totalQuestions) * 100;
+
+  const trackCompletion = () => {
+    try {
+      const event = new CustomEvent("legacy-letter:completed", {
+        detail: { timestamp: new Date().toISOString() }
+      });
+      window.dispatchEvent(event);
+    } catch (error) {
+      console.info("legacy-letter completion", {
+        timestamp: new Date().toISOString()
+      });
+    }
+  };
 
   const handleNext = () => {
     setShowErrors(false);
@@ -162,6 +177,8 @@ export default function Home() {
         timeStyle: "short"
       }).format(now)
     );
+    setIsCompleted(true);
+    trackCompletion();
   };
 
   return (
@@ -201,7 +218,8 @@ export default function Home() {
                     : `Question ${currentStep} of ${totalQuestions}`}
                 </p>
                 <p className="text-xs text-slate-500">
-                  Nothing is uploaded or stored.
+                  Your answers are generated and downloaded locally. We don&apos;t
+                  upload or store your responses unless you explicitly ask us to.
                 </p>
               </div>
               <div className="h-2 w-full rounded-full bg-slate-100">
@@ -338,7 +356,8 @@ export default function Home() {
                 Ready to download?
               </h2>
               <p className="text-sm text-brand-600">
-                Your letter saves locally on download. We do not store anything.
+                Your answers are generated and downloaded locally. We don&apos;t
+                upload or store your responses unless you explicitly ask us to.
               </p>
             </div>
             <p className="text-sm text-brand-600">
@@ -361,6 +380,35 @@ export default function Home() {
             </p>
           )}
         </div>
+
+        {isCompleted ? (
+          <section className="flex flex-col gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xl font-semibold text-slate-900">
+                Share your letter later (optional)
+              </h2>
+              <p className="text-sm leading-relaxed text-slate-600">
+                If you&apos;d like us to email this letter on your behalf, add one or
+                more addresses below. We send these manually with care—you can
+                also leave this blank and handle it yourself.
+              </p>
+            </div>
+            <label className="flex flex-col gap-2 text-sm text-slate-700">
+              Email addresses
+              <input
+                type="text"
+                value={emailRecipients}
+                onChange={(event) => setEmailRecipients(event.target.value)}
+                placeholder="Add one or more email addresses, separated by commas (optional)"
+                className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
+              />
+            </label>
+            <p className="text-xs text-slate-500">
+              We only use these addresses if you later ask us to send the letter.
+              Nothing is sent automatically.
+            </p>
+          </section>
+        ) : null}
       </form>
     </main>
   );
