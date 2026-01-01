@@ -5,52 +5,46 @@ import { FormEvent, useMemo, useState } from "react";
 type Prompt = {
   id: string;
   title: string;
-  description: string;
   placeholder: string;
+  description?: string;
 };
 
 const PROMPTS: Prompt[] = [
   {
     id: "opening",
-    title: "Opening gratitude",
-    description:
-      "Begin with a warm greeting. Share gratitude for the person or people who will read this letter.",
-    placeholder: "Dear..., thank you for..."
+    title:
+      "If someone important to you were hearing this many years from now, what would you want them to understand about the way you lived your life?",
+    placeholder: "Share the moments or beliefs that shaped your path."
   },
   {
     id: "values",
-    title: "Guiding values",
-    description:
-      "Name the values that have carried you through life. Explain how they shaped your choices.",
-    placeholder: "The principles I return to are..."
+    title:
+      "What principles or values do you believe should never be compromised, regardless of the situation?",
+    placeholder: "Name the values you want to pass along."
   },
   {
     id: "memories",
-    title: "Moments that matter",
-    description:
-      "Recall a few memories that capture who you are and how you want to be remembered.",
-    placeholder: "I often think about the time..."
+    title:
+      "In your own words, what does a life well lived look like to you?",
+    placeholder: "Describe the qualities of a life that feels complete."
   },
   {
     id: "lessons",
-    title: "Lessons learned",
-    description:
-      "Pass along wisdom, advice, or hard-won lessons you hope will guide future generations.",
-    placeholder: "If there is one lesson I would share..."
+    title:
+      "Is there a mistake, habit, or way of thinking that you hope those who come after you can avoid?",
+    placeholder: "Offer a gentle warning or lesson learned."
   },
   {
     id: "hopes",
-    title: "Hopes for the future",
-    description:
-      "Describe your hopes for your loved ones and the legacy you wish to leave behind.",
-    placeholder: "My hope for you is..."
+    title:
+      "Is there something about you—your choices, your character, or your intentions—that people often misunderstand?",
+    placeholder: "Clarify what you hope others come to see clearly."
   },
   {
     id: "closing",
-    title: "Closing blessing",
-    description:
-      "Offer closing words, encouragement, or a blessing to end the letter with warmth.",
-    placeholder: "With love..."
+    title:
+      "If this message were played during a difficult or important decision, what guidance would you want it to offer?",
+    placeholder: "Share the counsel that would steady someone you love."
   }
 ];
 
@@ -129,13 +123,16 @@ export default function Home() {
             Legacy Letter
           </p>
           <h1 className="text-3xl font-semibold text-slate-900 md:text-4xl">
-            Capture your voice with care
+            Capture your reflections with care
           </h1>
           <p className="max-w-2xl text-lg leading-relaxed text-slate-600">
             These six reflections guide you through crafting a letter that
             honors your journey and the people who matter most. Take a breath,
             answer at your own pace, and download your words when they feel
             complete.
+          </p>
+          <p className="text-sm font-medium text-brand-600">
+            Most people finish in about 10 minutes.
           </p>
         </header>
       </section>
@@ -159,9 +156,11 @@ export default function Home() {
                   <h2 className="text-xl font-semibold text-slate-900">
                     {prompt.title}
                   </h2>
-                  <p className="text-sm leading-relaxed text-slate-600">
-                    {prompt.description}
-                  </p>
+                  {prompt.description ? (
+                    <p className="text-sm leading-relaxed text-slate-600">
+                      {prompt.description}
+                    </p>
+                  ) : null}
                   <label className="sr-only" htmlFor={prompt.id}>
                     {prompt.title}
                   </label>
@@ -178,6 +177,9 @@ export default function Home() {
                     placeholder={prompt.placeholder}
                     className="min-h-[160px] rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-base leading-relaxed text-slate-800 shadow-inner outline-none transition focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-200"
                   />
+                  <p className="text-xs text-slate-500">
+                    Tip: you can use system dictation to speak instead of typing.
+                  </p>
                   {showFieldError ? (
                     <p className="text-sm font-medium text-brand-600">
                       Please add a few words here so your letter feels complete.
