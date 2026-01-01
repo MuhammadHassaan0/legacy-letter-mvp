@@ -135,7 +135,7 @@ export default function Home() {
     }
 
     const now = new Date();
-  const letter = formatLetter(responses, now);
+    const letter = formatLetter(responses, now);
     const fileName = `legacy-letter-${now.toISOString().replace(/[:.]/g, "-")}.txt`;
 
     const blob = new Blob([letter], { type: "text/plain" });
