@@ -84,6 +84,8 @@ export default function Home() {
   const [currentStep, setCurrentStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [emailIntentSubmitted, setEmailIntentSubmitted] = useState(false);
+  const [emailIntentError, setEmailIntentError] = useState<string | null>(null);
 
   const totalQuestions = PROMPTS.length;
   const activePrompt = currentStep < totalQuestions
@@ -150,7 +152,44 @@ export default function Home() {
 
     setShowErrors(false);
     setIsCompleted(true);
+    setEmailIntentSubmitted(false);
+    setEmailIntentError(null);
     trackCompletion();
+  };
+
+  const handleEmailIntent = () => {
+    const primary = details.email.trim();
+    const additional = details.recipients
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!primary && additional.length === 0) {
+      setEmailIntentError(
+        "Add your email or at least one recipient so we know who to follow up with."
+      );
+      return;
+    }
+
+    setEmailIntentError(null);
+    setEmailIntentSubmitted(true);
+
+    try {
+      const event = new CustomEvent("legacy-letter:email-intent", {
+        detail: {
+          email: primary || null,
+          recipients: additional,
+          timestamp: new Date().toISOString()
+        }
+      });
+      window.dispatchEvent(event);
+    } catch (error) {
+      console.info("legacy-letter email intent", {
+        email: primary || null,
+        recipients: additional,
+        timestamp: new Date().toISOString()
+      });
+    }
   };
 
   return (
@@ -277,8 +316,9 @@ export default function Home() {
                 Your letter is ready
               </h2>
               <p className="text-sm leading-relaxed text-slate-600">
-                We&apos;ve downloaded your letter to this device. If you&apos;d like us to
-                email your reflections later, you can leave instructions here.
+                We&apos;ve downloaded your letter to this device. If you&apos;d like
+                help sharing it over email, leave the details below and we&apos;ll
+                coordinate with you first.
               </p>
             </div>
             <label className="flex flex-col gap-2 text-sm text-slate-700">
@@ -312,9 +352,27 @@ export default function Home() {
               />
             </label>
             <p className="text-xs text-slate-500">
-              Emails are never sent automatically. We reach out manually only if
-              you invite us to help share your letter.
+              Emails are never sent automatically. We keep your reflections on
+              this device unless you explicitly ask us to help share them.
             </p>
+            {emailIntentError ? (
+              <p className="text-sm font-medium text-brand-600">
+                {emailIntentError}
+              </p>
+            ) : null}
+            {emailIntentSubmitted ? (
+              <p className="text-sm font-medium text-brand-700">
+                Thanks — we&apos;ll follow up before sending anything.
+              </p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleEmailIntent}
+                className="inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+              >
+                Ask us to email this letter
+              </button>
+            )}
           </section>
         )}
       </form>
