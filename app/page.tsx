@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 type Prompt = {
   id: string;
@@ -24,8 +24,7 @@ const PROMPTS: Prompt[] = [
   },
   {
     id: "memories",
-    title:
-      "In your own words, what does a life well lived look like to you?",
+    title: "In your own words, what does a life well lived look like to you?",
     placeholder: "Describe the qualities of a life that feels complete."
   },
   {
@@ -75,6 +74,39 @@ const formatLetter = (responses: Responses, timestamp: Date) => {
   return `Legacy Letter\nCreated on: ${formattedTimestamp}\n\n${body}\n`;
 };
 
+// ✅ YOUR Apps Script Web App URL (doGet)
+const TRACKING_URL =
+  "https://script.google.com/macros/s/AKfycbwqHmt0pKOJxEIU5Ph1oVeqlocVfRVH2QnoCmSkOy6hoOycrIkuhjMGtlEeSeHSM5G8jQ/exec";
+
+// super-safe tracking: Image beacon (no CORS issues)
+function track(event: string, extra?: string) {
+  try {
+    const storageKey = "legacy_letter_anon_id";
+    let anonId = localStorage.getItem(storageKey);
+    if (!anonId) {
+      anonId = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(storageKey, anonId);
+    }
+
+    const params = new URLSearchParams();
+    params.set("event", event);
+    params.set("anon_id", anonId);
+    params.set("ts", Date.now().toString());
+    if (extra) params.set("extra", extra);
+
+    const url = `${TRACKING_URL}?${params.toString()}`;
+
+    // If you ever need to debug:
+    // console.log("TRACK:", url);
+
+    const img = new Image();
+    img.src = url;
+  } catch (err) {
+    // never break UX
+    console.info("tracking failed", err);
+  }
+}
+
 export default function Home() {
   const [responses, setResponses] = useState<Responses>(buildInitialResponses);
   const [details, setDetails] = useState<PersonalDetails>({
@@ -87,14 +119,17 @@ export default function Home() {
   const [emailIntentSubmitted, setEmailIntentSubmitted] = useState(false);
   const [emailIntentError, setEmailIntentError] = useState<string | null>(null);
 
+  // ✅ log a page view once
+  useEffect(() => {
+    track("page_view");
+  }, []);
+
   const totalQuestions = PROMPTS.length;
-  const activePrompt = currentStep < totalQuestions
-    ? PROMPTS[currentStep]
-    : undefined;
+  const activePrompt =
+    currentStep < totalQuestions ? PROMPTS[currentStep] : undefined;
 
   const allComplete = useMemo(
-    () =>
-      PROMPTS.every((prompt) => responses[prompt.id].trim().length > 0),
+    () => PROMPTS.every((prompt) => responses[prompt.id].trim().length > 0),
     [responses]
   );
 
@@ -103,19 +138,6 @@ export default function Home() {
 
   const progressPercentage =
     (Math.min(currentStep + 1, totalQuestions) / totalQuestions) * 100;
-
-  const trackCompletion = () => {
-    try {
-      const event = new CustomEvent("legacy-letter:completed", {
-        detail: { timestamp: new Date().toISOString() }
-      });
-      window.dispatchEvent(event);
-    } catch (error) {
-      console.info("legacy-letter completion", {
-        timestamp: new Date().toISOString()
-      });
-    }
-  };
 
   const handleNext = () => {
     setShowErrors(false);
@@ -131,6 +153,7 @@ export default function Home() {
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
     if (!allComplete) {
       setShowErrors(true);
       return;
@@ -138,7 +161,9 @@ export default function Home() {
 
     const now = new Date();
     const letter = formatLetter(responses, now);
-    const fileName = `legacy-letter-${now.toISOString().replace(/[:.]/g, "-")}.txt`;
+    const fileName = `legacy-letter-${now
+      .toISOString()
+      .replace(/[:.]/g, "-")}.txt`;
 
     const blob = new Blob([letter], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
@@ -154,7 +179,9 @@ export default function Home() {
     setIsCompleted(true);
     setEmailIntentSubmitted(false);
     setEmailIntentError(null);
-    trackCompletion();
+
+    // ✅ TRACK: successful generate + download
+    track("generate_download");
   };
 
   const handleEmailIntent = () => {
@@ -174,22 +201,23 @@ export default function Home() {
     setEmailIntentError(null);
     setEmailIntentSubmitted(true);
 
-    try {
-      const event = new CustomEvent("legacy-letter:email-intent", {
-        detail: {
-          email: primary || null,
-          recipients: additional,
-          timestamp: new Date().toISOString()
-        }
-      });
-      window.dispatchEvent(event);
-    } catch (error) {
-      console.info("legacy-letter email intent", {
-        email: primary || null,
-        recipients: additional,
-        timestamp: new Date().toISOString()
-      });
-    }
+    // ✅ TRACK: email intent (include light info as extra)
+    const extra = `from=${primary || "(none)"};recipients=${
+      additional.length ? additional.join(",") : "(none)"
+    }`;
+    track("email_intent", extra);
+
+    // Optional: if you want to open their email client as well, uncomment:
+    //
+    // const subject = encodeURIComponent("Legacy Letter: email request");
+    // const body = encodeURIComponent(
+    //   `Hi Astralink,\n\nPlease email the legacy letter to:\n` +
+    //     `From (optional): ${primary || "(not provided)"}\n` +
+    //     `Recipients: ${additional.length ? additional.join(", ") : "(none)"}\n` +
+    //     `Timestamp: ${new Date().toISOString()}\n\n` +
+    //     `Notes (optional):\n`
+    // );
+    // window.location.href = `mailto:astralinkorg@gmail.com?subject=${subject}&body=${body}`;
   };
 
   return (
