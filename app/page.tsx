@@ -107,6 +107,16 @@ function track(event: string, extra?: string) {
   }
 }
 
+// --- NEW: helper to save emails to your Vercel KV via API ---
+async function saveEmailIntentToKV(emails: string[]) {
+  // save each email separately, dedup happens server-side
+  for (const email of emails) {
+    await fetch(`/api/email-intent/save?email=${encodeURIComponent(email)}`, {
+      method: "POST"
+    });
+  }
+}
+
 export default function Home() {
   const [responses, setResponses] = useState<Responses>(buildInitialResponses);
   const [details, setDetails] = useState<PersonalDetails>({
@@ -118,6 +128,7 @@ export default function Home() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [emailIntentSubmitted, setEmailIntentSubmitted] = useState(false);
   const [emailIntentError, setEmailIntentError] = useState<string | null>(null);
+  const [emailIntentLoading, setEmailIntentLoading] = useState(false);
 
   // ✅ log a page view once
   useEffect(() => {
@@ -184,14 +195,19 @@ export default function Home() {
     track("generate_download");
   };
 
-  const handleEmailIntent = () => {
+  const handleEmailIntent = async () => {
     const primary = details.email.trim();
     const additional = details.recipients
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
 
-    if (!primary && additional.length === 0) {
+    // collect all emails to save
+    const emailsToSave = [primary, ...additional]
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    if (emailsToSave.length === 0) {
       setEmailIntentError(
         "Add your email or at least one recipient so we know who to follow up with."
       );
@@ -199,13 +215,28 @@ export default function Home() {
     }
 
     setEmailIntentError(null);
-    setEmailIntentSubmitted(true);
+    setEmailIntentLoading(true);
 
-    // ✅ TRACK: email intent (include light info as extra)
+    // ✅ TRACK: email intent (light info as extra)
     const extra = `from=${primary || "(none)"};recipients=${
       additional.length ? additional.join(",") : "(none)"
     }`;
     track("email_intent", extra);
+
+    try {
+      // ✅ NEW: save into Vercel KV via API
+      await saveEmailIntentToKV(emailsToSave);
+
+      setEmailIntentSubmitted(true);
+    } catch (err) {
+      console.error(err);
+      setEmailIntentError(
+        "Couldn’t save right now (temporary). Please try again in a moment."
+      );
+      setEmailIntentSubmitted(false);
+    } finally {
+      setEmailIntentLoading(false);
+    }
 
     // Optional: if you want to open their email client as well, uncomment:
     //
@@ -396,9 +427,10 @@ export default function Home() {
               <button
                 type="button"
                 onClick={handleEmailIntent}
-                className="inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300"
+                disabled={emailIntentLoading}
+                className="inline-flex items-center justify-center rounded-full bg-brand-700 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-brand-900/20 transition hover:bg-brand-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-300 disabled:cursor-not-allowed disabled:bg-brand-200"
               >
-                Ask us to email this letter
+                {emailIntentLoading ? "Saving..." : "Ask us to email this letter"}
               </button>
             )}
           </section>
@@ -407,3 +439,4 @@ export default function Home() {
     </main>
   );
 }
+
